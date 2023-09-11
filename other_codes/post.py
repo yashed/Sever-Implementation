@@ -3,7 +3,6 @@ import os
 import urllib.parse
 import tempfile
 import subprocess
-import re
 
 
 def handle_request(request):
@@ -39,20 +38,10 @@ def create_temp_php_file(post_data, display_php_content):
     return temp_php_file_path
 
 
-def get_linked_php_name(request):
-    # Use regular expression to extract the PHP file name from the request line
-    match = re.search(r'POST /(\w+\.php)', request)
-    if match:
-        return match.group(1)
-    return None
-
-
 def get_display_php_content():
     # Read the content of the display.php file
-    linked_php_file = get_linked_php_name(request)
-    print("Linked file name = ", linked_php_file)
     display_php_path = os.path.join(
-        os.path.dirname(__file__), linked_php_file)
+        os.path.dirname(__file__), "display.php")
     with open(display_php_path, 'r') as display_php_file:
         display_php_content = display_php_file.read()
 
