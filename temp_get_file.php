@@ -1,3 +1,11 @@
+<?php
+// Data that pass through POST
+$data = array(
+);
+foreach ($data as $key => $value) {
+   $_GET[$key] = $value;
+}
+?>
 <!DOCTYPE html>
 <html>
 

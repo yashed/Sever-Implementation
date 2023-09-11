@@ -11,65 +11,20 @@ def handle_request(request):
     if len(request_lines) > 0:
         first_line = request_lines[0]
         parts = first_line.split(" ")
+
         if len(parts) > 1:
-            route = parts[1]
-            return route.strip()
-    return "/form.php"  # Default route to load form.php
+            request_path = parts[1]
+            match = re.match(r'GET /(\w+\.php)\?(.*?) HTTP', request_path)
+            if match:
+                linked_php_name = match.group(1)
+                parameters_str = match.group(2)
+                parameters = dict(urllib.parse.parse_qsl(parameters_str))
+                return linked_php_name, parameters
+
+    return "index.php", {}  # Default route to load index.php and empty parameters
 
 
-def create_temp_php_file(post_data, display_php_content):
-    # Specify a relative path for the temporary PHP file in the current directory
-    temp_php_file_path = os.path.join(
-        os.path.dirname(__file__), "temp_php_file.php")
-
-    # Write the PHP code with POST data and display.php content to the temporary file
-    with open(temp_php_file_path, 'w') as temp_php_file:
-        temp_php_file.write('<?php\n')
-        temp_php_file.write('// Data that pass through POST\n')
-        temp_php_file.write('$data = array(\n')
-        for key, value in post_data.items():
-            temp_php_file.write(f"   '{key}' => '{value}',\n")
-        temp_php_file.write(");\n")
-        temp_php_file.write('foreach ($data as $key => $value) {\n')
-        temp_php_file.write('   $_POST[$key] = $value;\n')
-        temp_php_file.write('}\n')
-        temp_php_file.write('?>\n')
-        temp_php_file.write(display_php_content)
-
-    return temp_php_file_path
-
-
-def get_linked_php_name(request):
-    # Use regular expression to extract the PHP file name from the request line
-    match = re.search(r'POST /(\w+\.php)', request)
-    if match:
-        return match.group(1)
-    return None
-
-
-def get_display_php_content():
-    # Read the content of the display.php file
-    linked_php_file = get_linked_php_name(request)
-    print("Linked file name = ", linked_php_file)
-    display_php_path = os.path.join(
-        os.path.dirname(__file__), linked_php_file)
-    with open(display_php_path, 'r') as display_php_file:
-        display_php_content = display_php_file.read()
-
-    return display_php_content
-
-
-def run_php_file(php_file_path):
-    try:
-        # Use subprocess to execute the PHP file
-        output = subprocess.run(['php', php_file_path],
-                                capture_output=True, text=True, check=True)
-        return output.stdout
-    except subprocess.CalledProcessError as e:
-        return "Error: " + e.stderr
-
-
-def serve_php_file(route, query_parameters={}):
+def serve_php_file(route):
     if route.startswith("/"):
         route = route[1:]
 
@@ -78,73 +33,59 @@ def serve_php_file(route, query_parameters={}):
     php_file_path = os.path.join(script_dir, route)
 
     if os.path.exists(php_file_path):
-        # Handle GET request
-        php_content = run_php_file(php_file_path)
-        return php_content
+        # Use subprocess to execute the PHP file
+        try:
+            output = subprocess.run(
+                ['php', '-S', 'localhost:8000', '-t', script_dir, php_file_path], capture_output=True, text=True, check=True)
+            return output.stdout
+        except subprocess.CalledProcessError as e:
+            return "Error: " + e.stderr
     else:
         return "File not found"
 
 
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-print('Socket Created')
+def main():
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    print('Socket Created')
 
-serverAddress = ('localhost', 2728)
-s.bind(serverAddress)
+    serverAddress = ('localhost', 2728)
+    s.bind(serverAddress)
 
-s.listen(5)
-print("Waiting for Connection")
+    s.listen(5)
+    print("Waiting for Connection")
 
-while True:
-    con, addr = s.accept()
-    print("Connected with", addr)
+    while True:
+        con, addr = s.accept()
+        print("Connected with", addr)
 
-    try:
-        request = con.recv(4096).decode()
-        route = handle_request(request)
+        try:
+            request = con.recv(4096).decode("utf-8")
+            print("Request = ", request)
+            linked_php_name, parameters = handle_request(request)
 
-        # Extract query parameters if present
-        query_parameters = {}
-        if "?" in route:
-            route, query_string = route.split("?", 1)
-            query_parameters = dict(item.split("=")
-                                    for item in query_string.split("&"))
+            print("Linked PHP file name = ", linked_php_name)
+            print("Parameters = ", parameters)
 
-        # Check if it's a POST request and get the POST data
-        post_data = {}
-        if "POST /" in request:
-            print("Req = ", request)
+            if parameters and linked_php_name:
+                # Read the content of the linked PHP file
+                linked_php_path = os.path.join(
+                    os.path.dirname(__file__), linked_php_name)
 
-           # Read the request in a loop until the end of the request data
-            while True:
-                data = con.recv(1024).decode()
-                request += data
-                if "\r\n\r\n" in request:
-                    break
+                # Serve the PHP file
+                php_content = serve_php_file(linked_php_path)
+            else:
+                # Serve the PHP file
+                php_content = serve_php_file(
+                    "index.php")  # Default to index.php
 
-            # Extract POST data
-            post_data_str = request.split("\r\n\r\n", 1)[1]
-            post_data = dict(urllib.parse.parse_qsl(post_data_str))
+            # Create an HTTP response with the PHP content
+            http_response = f"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n{php_content}"
 
-            # Print POST Data
-            print("POST Data:")
-            for key, value in post_data.items():
-                print("data= ", key, "val =  ", value)
+            # Send the HTTP response to the client
+            con.sendall(http_response.encode())
+        finally:
+            con.close()
 
-            display_php_content = get_display_php_content()
-            # Create a temporary PHP file with POST data
-            temp_php_file_path = create_temp_php_file(
-                post_data, display_php_content)
-            # Serve the temporary PHP file
-            php_content = run_php_file(temp_php_file_path)
 
-        else:
-            # Serve the PHP file with the query parameters (GET data)
-            php_content = serve_php_file(route, query_parameters)
-
-        # Create an HTTP response with the PHP content
-        http_response = f"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n{php_content}"
-
-        # Send the HTTP response to the client
-        con.sendall(http_response.encode())
-    finally:
-        con.close()
+if __name__ == "__main__":
+    main()

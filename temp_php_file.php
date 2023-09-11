@@ -1,8 +1,8 @@
 <?php
 // Data that pass through POST
 $data = array(
-   'Name' => '1',
-   'Last' => '2',
+   'Name' => '35',
+   'Last' => '44',
 );
 foreach ($data as $key => $value) {
    $_POST[$key] = $value;
@@ -23,7 +23,7 @@ foreach ($data as $key => $value) {
         $last = $_POST["Last"];
 
         echo $last + $name;
-        echo "<p>Hello, $name $last!</p>";
+        echo "<p>Number 1 = $name</br> Number 2 = $last</p>";
     } else {
         echo "<p>No data submitted.</p>";
     }

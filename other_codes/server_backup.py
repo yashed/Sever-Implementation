@@ -11,10 +11,17 @@ def handle_request(request):
     if len(request_lines) > 0:
         first_line = request_lines[0]
         parts = first_line.split(" ")
+
         if len(parts) > 1:
             route = parts[1]
-            return route.strip()
-    return "/form.php"  # Default route to load form.php
+            route = route.strip()
+
+            if (route == '/'):
+                route = "index.php"
+
+            return route
+
+    return "index.php"  # Default route to load form.php
 
 
 def create_temp_php_file(post_data, display_php_content):
@@ -50,9 +57,10 @@ def get_linked_php_name(request):
 def get_display_php_content():
     # Read the content of the display.php file
     linked_php_file = get_linked_php_name(request)
+    print(linked_php_file)
     print("Linked file name = ", linked_php_file)
     display_php_path = os.path.join(
-        os.path.dirname(__file__), linked_php_file)
+        os.path.dirname(__file__), f"htdocs/{linked_php_file}")
     with open(display_php_path, 'r') as display_php_file:
         display_php_content = display_php_file.read()
 
@@ -75,7 +83,7 @@ def serve_php_file(route, query_parameters={}):
 
     # Get the absolute path to the current script
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    php_file_path = os.path.join(script_dir, route)
+    php_file_path = os.path.join(script_dir, f"htdocs/{route}")
 
     if os.path.exists(php_file_path):
         # Handle GET request
@@ -99,9 +107,9 @@ while True:
     print("Connected with", addr)
 
     try:
-        request = con.recv(4096).decode()
+        request = con.recv(4096).decode('utf-8')
         route = handle_request(request)
-
+        print("Route = ", route)
         # Extract query parameters if present
         query_parameters = {}
         if "?" in route:
@@ -111,14 +119,20 @@ while True:
 
         # Check if it's a POST request and get the POST data
         post_data = {}
+        get_data = {}
         if "POST /" in request:
             print("Req = ", request)
 
            # Read the request in a loop until the end of the request data
             while True:
-                data = con.recv(1024).decode()
+                print("Break ")
+                data = request
                 request += data
+
                 if "\r\n\r\n" in request:
+                    break
+                print("Break2 ")
+                if not data:
                     break
 
             # Extract POST data
@@ -136,7 +150,7 @@ while True:
                 post_data, display_php_content)
             # Serve the temporary PHP file
             php_content = run_php_file(temp_php_file_path)
-
+        # elif "GET /" in request:
         else:
             # Serve the PHP file with the query parameters (GET data)
             php_content = serve_php_file(route, query_parameters)

@@ -13,7 +13,7 @@
         $last = $_POST["Last"];
 
         echo $last + $name;
-        echo "<p>Hello, $name $last!</p>";
+        echo "<p>Number 1 = $name</br> Number 2 = $last</p>";
     } else {
         echo "<p>No data submitted.</p>";
     }
